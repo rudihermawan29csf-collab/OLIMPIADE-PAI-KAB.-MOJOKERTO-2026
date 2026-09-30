@@ -1,0 +1,168 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Admin, Superadmin, atau Pengawas CBT MGMP PAI",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "role": { "type": "string", "enum": ["superadmin", "admin", "pengawas"] },
+        "schoolAffiliation": { "type": "string", "maxLength": 150 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "displayName", "role"]
+    },
+    "School": {
+      "title": "School",
+      "description": "Data Sekolah SMP Peserta Olimpiade PAI di Kabupaten Mojokerto",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 150 },
+        "npsn": { "type": "string", "maxLength": 20 },
+        "address": { "type": "string", "maxLength": 250 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "Butir Soal Bank Soal Olimpiade PAI (PG / PGK)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "subject": { "type": "string" },
+        "topic": { "type": "string", "maxLength": 100 },
+        "difficulty": { "type": "string", "enum": ["Mudah", "Sedang", "Sukar"] },
+        "type": { "type": "string", "enum": ["PG", "PGK"] },
+        "stimulus": { "type": "string" },
+        "question": { "type": "string" },
+        "options": { "type": "array" },
+        "correctAnswers": { "type": "array" },
+        "explanation": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "subject", "topic", "question", "options", "correctAnswers"]
+    },
+    "Exam": {
+      "title": "Exam",
+      "description": "Pengaturan Sesi Ujian CBT Olimpiade PAI",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 150 },
+        "description": { "type": "string" },
+        "questionCount": { "type": "number" },
+        "durationMinutes": { "type": "number" },
+        "startAt": { "type": "string" },
+        "endAt": { "type": "string" },
+        "randomQuestion": { "type": "boolean" },
+        "randomOption": { "type": "boolean" },
+        "antiCheat": { "type": "boolean" },
+        "fullscreenRequired": { "type": "boolean" },
+        "token": { "type": "string", "maxLength": 16 },
+        "hideScoreFromParticipant": { "type": "boolean" },
+        "passingScore": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "scheduled", "active", "completed"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "questionCount", "durationMinutes", "token", "status"]
+    },
+    "Participant": {
+      "title": "Participant",
+      "description": "Data Sesi Peserta Siswa Ujian CBT",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "schoolId": { "type": "string" },
+        "schoolName": { "type": "string" },
+        "participantNumber": { "type": "string", "maxLength": 30 },
+        "examId": { "type": "string" },
+        "status": { "type": "string", "enum": ["ready", "active", "warning", "violated", "completed", "disconnected"] },
+        "startedAt": { "type": "string" },
+        "finishedAt": { "type": "string" },
+        "lastActiveAt": { "type": "string" },
+        "currentQuestionIndex": { "type": "number" },
+        "markedQuestions": { "type": "array" },
+        "answers": { "type": "object" },
+        "violationCount": { "type": "number" },
+        "attemptId": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "name", "schoolId", "participantNumber", "examId", "status", "attemptId"]
+    },
+    "Violation": {
+      "title": "Violation",
+      "description": "Log Kejadian Pelanggaran Anti-Curang CBT",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "participantId": { "type": "string" },
+        "participantName": { "type": "string" },
+        "schoolName": { "type": "string" },
+        "examId": { "type": "string" },
+        "type": { "type": "string" },
+        "violationNumber": { "type": "number" },
+        "timestamp": { "type": "string" },
+        "detail": { "type": "string" }
+      },
+      "required": ["id", "participantId", "examId", "type", "violationNumber", "timestamp"]
+    },
+    "Result": {
+      "title": "Result",
+      "description": "Rekapitulasi Nilai Akhir Peserta Ujian",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "participantId": { "type": "string" },
+        "participantName": { "type": "string" },
+        "schoolName": { "type": "string" },
+        "participantNumber": { "type": "string" },
+        "examId": { "type": "string" },
+        "examTitle": { "type": "string" },
+        "totalQuestions": { "type": "number" },
+        "correctCount": { "type": "number" },
+        "wrongCount": { "type": "number" },
+        "unansweredCount": { "type": "number" },
+        "score": { "type": "number" },
+        "percentage": { "type": "number" },
+        "durationSeconds": { "type": "number" },
+        "submittedAt": { "type": "string" },
+        "status": { "type": "string", "enum": ["completed", "violated"] }
+      },
+      "required": ["id", "participantId", "examId", "totalQuestions", "score", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Pengguna Admin dan Pengawas MGMP PAI"
+    },
+    "/schools/{schoolId}": {
+      "schema": "School",
+      "description": "Data Sekolah Peserta"
+    },
+    "/questions/{questionId}": {
+      "schema": "Question",
+      "description": "Master Bank Soal PAI"
+    },
+    "/exams/{examId}": {
+      "schema": "Exam",
+      "description": "Sesi dan Konfigurasi Ujian CBT"
+    },
+    "/participants/{participantId}": {
+      "schema": "Participant",
+      "description": "Sesi Pengerjaan Peserta CBT"
+    },
+    "/violations/{violationId}": {
+      "schema": "Violation",
+      "description": "Log Catatan Pelanggaran Anti-Curang"
+    },
+    "/results/{resultId}": {
+      "schema": "Result",
+      "description": "Rekap Hasil dan Nilai Akhir"
+    }
+  }
+}

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      window.addEventListener('error', function(e) {
+        if (!e) return;
+        var msg = (typeof e === 'string' ? e : e.message) || '';
+        if (msg === 'Script error.' || msg === 'Script error' || msg.indexOf('Script error') !== -1) {
+          if (typeof e.preventDefault === 'function') e.preventDefault();
+          if (typeof e.stopPropagation === 'function') e.stopPropagation();
+          return true;
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function(e) {
+        if (!e) return;
+        var reason = e.reason ? (e.reason.message || String(e.reason)) : '';
+        if (reason.indexOf('Script error') !== -1) {
+          if (typeof e.preventDefault === 'function') e.preventDefault();
+          return true;
+        }
+      });
+    </script>
+    <title>OLIMPIADE PAI KABUPATEN MOJOKERTO | MGMP PAI</title>
+    <link rel="icon" type="image/jpeg" href="https://www.image2url.com/r2/default/images/1790651733373-bd2c8898-16e6-455d-8628-1bd57febfedb.jpg" />
+    <meta name="description" content="Aplikasi Computer Based Test (CBT) Olimpiade Pendidikan Agama Islam Tingkat SMP Kabupaten Mojokerto oleh MGMP PAI Kabupaten Mojokerto." />
+    <meta property="og:title" content="OLIMPIADE PAI KABUPATEN MOJOKERTO | MGMP PAI" />
+    <meta property="og:description" content="Aplikasi Computer Based Test (CBT) Olimpiade Pendidikan Agama Islam Tingkat SMP Kabupaten Mojokerto oleh MGMP PAI Kabupaten Mojokerto." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Amiri:wght@700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

@@ -1,0 +1,8 @@
+{
+  "name": "Remix OLIMPIADE PAI KABUPATEN MOJOKERTO",
+  "description": "Aplikasi Computer Based Test (CBT) Olimpiade Pendidikan Agama Islam Tingkat SMP Kabupaten Mojokerto oleh MGMP PAI Kabupaten Mojokerto.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

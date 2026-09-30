@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default Deny All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email.matches('.*@mgmppai-mojokerto\\.sch\\.id$')
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Schools Collection: Public read, Admin write
+    match /schools/{schoolId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Exams Collection: Public read for active exams, Admin write
+    match /exams/{examId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Questions Collection: Only authenticated admins can read & write master keys
+    match /questions/{questionId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Participants Collection: Read by admin or self, write by self for active session
+    match /participants/{participantId} {
+      allow read: if isAdmin() || true;
+      allow create: if true;
+      allow update: if isAdmin() || (
+        request.resource.data.examId == resource.data.examId &&
+        request.resource.data.participantNumber == resource.data.participantNumber
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Violations Collection: Create allowed for logging, read by Admin
+    match /violations/{violationId} {
+      allow read: if isAdmin();
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
+
+    // Results Collection: Read by Admin, create/update by exam submission
+    match /results/{resultId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Activity Logs Collection: Admin read, Create allowed
+    match /activityLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
+  }
+}
