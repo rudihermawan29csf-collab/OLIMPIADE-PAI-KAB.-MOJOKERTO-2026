@@ -380,31 +380,64 @@ function getQuestionsFromSheet(ss) {
 
 // 4. Ambil Hasil Ujian
 function getResultsFromSheet(ss) {
-  var sheet = ss.getSheetByName(SHEET_HASIL);
+  var sheet = ss.getSheetByName(SHEET_HASIL) ||
+              ss.getSheetByName('HASIL_UJIAN') ||
+              ss.getSheetByName('HASIL') ||
+              ss.getSheetByName('Hasil') ||
+              ss.getSheetByName('HASIL UJIAN');
   if (!sheet) return [];
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) return [];
 
+  var headers = values[0].map(function(h) { return String(h || '').toLowerCase().trim(); });
+  function findCol(keywords, fallback) {
+    for (var c = 0; c < headers.length; c++) {
+      for (var k = 0; k < keywords.length; k++) {
+        if (headers[c].indexOf(keywords[k]) !== -1) return c;
+      }
+    }
+    return fallback;
+  }
+
+  var cId = findCol(['id hasil', 'id'], 0);
+  var cName = findCol(['nama', 'siswa', 'peserta'], 1);
+  var cSchool = findCol(['sekolah', 'asal'], 2);
+  var cNumber = findCol(['nomor', 'no peserta'], 3);
+  var cTitle = findCol(['sesi', 'judul', 'ujian'], 4);
+  var cScore = findCol(['skor', 'nilai', 'score'], 5);
+  var cCorrect = findCol(['benar', 'correct'], 6);
+  var cWrong = findCol(['salah', 'wrong'], 7);
+  var cUnanswered = findCol(['kosong', 'tidak dijawab', 'unanswered'], 8);
+  var cTotal = findCol(['total', 'jumlah soal'], 9);
+  var cPercentage = findCol(['persen', 'ketuntasan'], 10);
+  var cDuration = findCol(['durasi', 'menit', 'waktu'], 11);
+  var cSubmitted = findCol(['penyerahan', 'selesai', 'tanggal', 'waktu penyerahan'], 12);
+
   var list = [];
   for (var i = 1; i < values.length; i++) {
     var row = values[i];
-    if (!row[0]) continue;
+    if (!row[0] && !row[cName]) continue;
+
+    var sc = Number((cScore >= 0 ? row[cScore] : row[5]) || 0);
+    var durMin = Number((cDuration >= 0 ? row[cDuration] : row[11]) || 0);
 
     list.push({
-      id: String(row[0]),
-      participantName: String(row[1] || ''),
-      schoolName: String(row[2] || ''),
-      participantNumber: String(row[3] || ''),
-      examTitle: String(row[4] || 'Olimpiade PAI SMP'),
-      score: Number(row[5] || 0),
-      correctCount: Number(row[6] || 0),
-      wrongCount: Number(row[7] || 0),
-      unansweredCount: Number(row[8] || 0),
-      totalQuestions: Number(row[9] || 0),
-      percentage: Number(String(row[10] || '0').replace('%', '')),
-      durationSeconds: Number(row[11] || 0) * 60,
-      submittedAt: row[12] ? new Date(row[12]).toISOString() : new Date().toISOString(),
-      status: Number(row[5] || 0) >= 75 ? 'passed' : 'evaluated'
+      id: String((cId >= 0 ? row[cId] : row[0]) || ('res-' + i)),
+      participantId: String((cId >= 0 ? row[cId] : row[0]) || ('p-' + i)),
+      participantName: String((cName >= 0 ? row[cName] : row[1]) || 'Siswa'),
+      schoolName: String((cSchool >= 0 ? row[cSchool] : row[2]) || '-'),
+      participantNumber: String((cNumber >= 0 ? row[cNumber] : row[3]) || '-'),
+      examId: 'exam-pai-mojokerto-2026',
+      examTitle: String((cTitle >= 0 ? row[cTitle] : row[4]) || 'Olimpiade PAI SMP'),
+      score: sc,
+      percentage: sc,
+      correctCount: Number((cCorrect >= 0 ? row[cCorrect] : row[6]) || 0),
+      wrongCount: Number((cWrong >= 0 ? row[cWrong] : row[7]) || 0),
+      unansweredCount: Number((cUnanswered >= 0 ? row[cUnanswered] : row[8]) || 0),
+      totalQuestions: Number((cTotal >= 0 ? row[cTotal] : row[9]) || 0),
+      durationSeconds: durMin * 60,
+      submittedAt: (cSubmitted >= 0 && row[cSubmitted]) ? new Date(row[cSubmitted]).toISOString() : new Date().toISOString(),
+      status: sc >= 75 ? 'passed' : 'evaluated'
     });
   }
   return list;
@@ -412,38 +445,49 @@ function getResultsFromSheet(ss) {
 
 // 5. Ambil Log Pelanggaran
 function getViolationsFromSheet(ss) {
-  var sheet = ss.getSheetByName(SHEET_PELANGGARAN);
+  var sheet = ss.getSheetByName(SHEET_PELANGGARAN) ||
+              ss.getSheetByName('PELANGGARAN') ||
+              ss.getSheetByName('Pelanggaran') ||
+              ss.getSheetByName('LOG_PELANGGARAN') ||
+              ss.getSheetByName('LOG PELANGGARAN');
   if (!sheet) return [];
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) return [];
 
-  var hasExamIdCol = (values[0] && values[0].length >= 9 && String(values[0][3] || '').toLowerCase().indexOf('sesi') >= 0);
+  var headers = values[0].map(function(h) { return String(h || '').toLowerCase().trim(); });
+  function findCol(keywords, fallback) {
+    for (var c = 0; c < headers.length; c++) {
+      for (var k = 0; k < keywords.length; k++) {
+        if (headers[c].indexOf(keywords[k]) !== -1) return c;
+      }
+    }
+    return fallback;
+  }
+
+  var cId = findCol(['id log', 'id'], 0);
+  var cName = findCol(['nama', 'siswa', 'peserta'], 1);
+  var cSchool = findCol(['sekolah', 'asal'], 2);
+  var cExam = findCol(['sesi', 'id sesi'], 3);
+  var cType = findCol(['jenis', 'tipe', 'type', 'pelanggaran'], 4);
+  var cStrike = findCol(['strike', 'ke', 'pelanggaran ke'], 5);
+  var cDetail = findCol(['detail', 'keterangan', 'deskripsi'], 6);
+  var cTime = findCol(['kejadian', 'waktu', 'tanggal'], 7);
 
   var list = [];
   for (var i = 1; i < values.length; i++) {
     var row = values[i];
-    if (!row[0] && !row[1]) continue;
-
-    var pName = String(row[1] || '');
-    var sName = String(row[2] || '');
-    var examId = hasExamIdCol ? String(row[3] || 'Olimpiade PAI') : 'Olimpiade PAI';
-    var type = hasExamIdCol ? String(row[4] || 'TAB_SWITCH') : String(row[3] || 'TAB_SWITCH');
-    var strike = hasExamIdCol ? Number(row[5] || 1) : Number(row[4] || 1);
-    var detail = hasExamIdCol ? String(row[6] || '') : String(row[5] || '');
-    var timestamp = hasExamIdCol
-      ? (row[7] ? new Date(row[7]).toISOString() : new Date().toISOString())
-      : (row[6] ? new Date(row[6]).toISOString() : new Date().toISOString());
+    if (!row[0] && !row[cName]) continue;
 
     list.push({
-      id: String(row[0] || ('viol-' + i)),
-      participantId: String(row[0] || ('viol-' + i)),
-      participantName: pName,
-      schoolName: sName,
-      examId: examId,
-      type: type,
-      violationNumber: strike,
-      detail: detail,
-      timestamp: timestamp
+      id: String((cId >= 0 ? row[cId] : row[0]) || ('viol-' + i)),
+      participantId: String((cId >= 0 ? row[cId] : row[0]) || ('p-' + i)),
+      participantName: String((cName >= 0 ? row[cName] : row[1]) || 'Peserta'),
+      schoolName: String((cSchool >= 0 ? row[cSchool] : row[2]) || '-'),
+      examId: String((cExam >= 0 ? row[cExam] : row[3]) || 'Olimpiade PAI'),
+      type: String((cType >= 0 ? row[cType] : row[4]) || 'TAB_SWITCH'),
+      violationNumber: Number((cStrike >= 0 ? row[cStrike] : row[5]) || 1),
+      detail: String((cDetail >= 0 ? row[cDetail] : row[6]) || '-'),
+      timestamp: (cTime >= 0 && row[cTime]) ? new Date(row[cTime]).toISOString() : new Date().toISOString()
     });
   }
   return list;
@@ -510,8 +554,14 @@ function doPost(e) {
 
     // 5. Sinkronisasi Hasil Ujian Siswa
     if (action === 'SYNC_RESULT') {
-      saveResult(ss, data.result, data.participant);
+      var resItem = (data && data.result) ? data.result : data;
+      var partItem = (data && data.participant) ? data.participant : null;
+      saveResult(ss, resItem, partItem);
       return responseJson({ status: 'ok', message: 'Hasil ujian tersimpan di sheet HASIL_UJIAN' });
+    }
+    if (action === 'SYNC_RESULTS') {
+      saveResults(ss, data);
+      return responseJson({ status: 'ok', message: 'Seluruh hasil ujian tersimpan di sheet HASIL_UJIAN' });
     }
 
     // 6. Sinkronisasi Log Pelanggaran Anti-Curang
@@ -734,30 +784,131 @@ function saveOrUpdateParticipant(ss, p) {
   }
 }
 
-// Simpan Nilai Hasil Ujian
+// Simpan Nilai Hasil Ujian (1 Siswa)
 function saveResult(ss, r, p) {
   if (!r) return;
   var sheet = getOrCreateSheet(ss, SHEET_HASIL);
-  var durationMin = Math.round((r.durationSeconds || 0) / 60);
-  var passStatus = r.score >= 75 ? 'LULUS (MEMENUHI KKM)' : 'TEREVALUASI';
 
-  sheet.appendRow([
-    r.id,
-    r.participantName || (p ? p.name : ''),
-    r.schoolName || (p ? p.schoolName : ''),
-    r.participantNumber || (p ? p.participantNumber : ''),
+  if (sheet.getLastRow() === 0 || String(sheet.getRange(1, 1).getValue()).trim() === '') {
+    sheet.getRange(1, 1, 1, 15).setValues([[
+      'ID Hasil',
+      'Nama Lengkap Siswa',
+      'Asal Sekolah',
+      'Nomor Peserta',
+      'Sesi Ujian',
+      'Skor Nilai Akhir (0-100)',
+      'Jawaban Benar',
+      'Jawaban Salah',
+      'Kosong / Tidak Dijawab',
+      'Total Soal',
+      'Persentase Ketuntasan',
+      'Durasi (Menit)',
+      'Waktu Penyerahan',
+      'Status Kelulusan',
+      'Waktu Catat Server'
+    ]]).setFontWeight('bold').setBackground('#EAF8F0').setFontColor('#087443');
+    sheet.setFrozenRows(1);
+  }
+
+  var durationMin = Math.round((r.durationSeconds || 0) / 60);
+  var passStatus = Number(r.score || 0) >= 75 ? 'LULUS (MEMENUHI KKM)' : 'TEREVALUASI';
+  var pName = r.participantName || (p ? p.name : '');
+  var sName = r.schoolName || (p ? p.schoolName : '');
+  var pNum = r.participantNumber || (p ? p.participantNumber : '');
+
+  var rowData = [
+    r.id || ('res-' + Date.now()),
+    pName,
+    sName,
+    pNum,
     r.examTitle || 'Olimpiade PAI SMP',
-    r.score,
-    r.correctCount,
-    r.wrongCount,
-    r.unansweredCount,
-    r.totalQuestions,
-    r.percentage + '%',
+    Number(r.score || 0),
+    Number(r.correctCount || 0),
+    Number(r.wrongCount || 0),
+    Number(r.unansweredCount || 0),
+    Number(r.totalQuestions || 0),
+    (r.percentage || r.score || 0) + '%',
     durationMin,
-    r.submittedAt,
+    r.submittedAt || new Date().toISOString(),
     passStatus,
     new Date()
-  ]);
+  ];
+
+  var values = sheet.getDataRange().getValues();
+  var foundRow = -1;
+  for (var i = 1; i < values.length; i++) {
+    if (values[i][0] == r.id || (pNum && values[i][3] == pNum) || (pName && values[i][1] == pName)) {
+      foundRow = i + 1;
+      break;
+    }
+  }
+
+  if (foundRow > 0) {
+    sheet.getRange(foundRow, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
+}
+
+// Simpan Rekap Seluruh Nilai Hasil Ujian (Banyak Siswa)
+function saveResults(ss, results) {
+  if (!results) return;
+  if (!Array.isArray(results)) results = [results];
+  if (results.length === 0) return;
+
+  var sheet = getOrCreateSheet(ss, SHEET_HASIL);
+
+  if (sheet.getLastRow() === 0 || String(sheet.getRange(1, 1).getValue()).trim() === '') {
+    sheet.getRange(1, 1, 1, 15).setValues([[
+      'ID Hasil',
+      'Nama Lengkap Siswa',
+      'Asal Sekolah',
+      'Nomor Peserta',
+      'Sesi Ujian',
+      'Skor Nilai Akhir (0-100)',
+      'Jawaban Benar',
+      'Jawaban Salah',
+      'Kosong / Tidak Dijawab',
+      'Total Soal',
+      'Persentase Ketuntasan',
+      'Durasi (Menit)',
+      'Waktu Penyerahan',
+      'Status Kelulusan',
+      'Waktu Catat Server'
+    ]]).setFontWeight('bold').setBackground('#EAF8F0').setFontColor('#087443');
+    sheet.setFrozenRows(1);
+  }
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, 15).clearContent();
+  }
+
+  var rows = results.map(function(r) {
+    var durationMin = Math.round((r.durationSeconds || 0) / 60);
+    var passStatus = Number(r.score || 0) >= 75 ? 'LULUS (MEMENUHI KKM)' : 'TEREVALUASI';
+    return [
+      r.id || ('res-' + Date.now()),
+      r.participantName || '',
+      r.schoolName || '',
+      r.participantNumber || '',
+      r.examTitle || 'Olimpiade PAI SMP',
+      Number(r.score || 0),
+      Number(r.correctCount || 0),
+      Number(r.wrongCount || 0),
+      Number(r.unansweredCount || 0),
+      Number(r.totalQuestions || 0),
+      (r.percentage || r.score || 0) + '%',
+      durationMin,
+      r.submittedAt || new Date().toISOString(),
+      passStatus,
+      new Date()
+    ];
+  });
+
+  if (rows.length > 0) {
+    sheet.getRange(2, 1, rows.length, 15).setValues(rows);
+  }
 }
 
 // Simpan 1 Log Pelanggaran
@@ -829,9 +980,7 @@ function exportAllData(ss, data) {
   }
 
   if (data.results && data.results.length > 0) {
-    data.results.forEach(function(r) {
-      saveResult(ss, r);
-    });
+    saveResults(ss, data.results);
   }
 
   if (data.violations && data.violations.length > 0) {

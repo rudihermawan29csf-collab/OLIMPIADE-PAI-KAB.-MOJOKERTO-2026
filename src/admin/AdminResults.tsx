@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { storageService } from '../services/storageService';
+import React, { useState, useEffect } from 'react';
+import { storageService, subscribeToStore } from '../services/storageService';
 import { excelUtils } from '../utils/excelUtils';
 import { sheetsSyncService } from '../services/sheetsSyncService';
 import { sheetsExportService } from '../services/sheetsExportService';
 import { useToast } from '../components/Toast';
+import { ExamResult } from '../types';
 import {
   Award,
   Printer,
@@ -12,18 +13,52 @@ import {
   XCircle,
   FileSpreadsheet,
   Send,
-  Copy
+  Copy,
+  RefreshCw
 } from 'lucide-react';
 
 export const AdminResults: React.FC = () => {
   const { showToast } = useToast();
   const activeExam = storageService.getActiveExam();
   const schools = storageService.getSchools();
-  const results = storageService.getResults(activeExam?.id);
 
+  const [results, setResults] = useState<ExamResult[]>(() => storageService.getResults());
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSchool, setSelectedSchool] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
+
+  // Subscribe to local store changes
+  useEffect(() => {
+    const unsub = subscribeToStore(() => {
+      setResults(storageService.getResults());
+    });
+    return () => unsub();
+  }, []);
+
+  // Tarik hasil ujian terbaru dari Google Spreadsheet saat halaman dibuka & auto polling
+  useEffect(() => {
+    if (!sheetsSyncService.isConfigured()) return;
+
+    // Initial pull
+    sheetsSyncService.pullResultsFromSheets().then((pulled) => {
+      if (pulled && pulled.length > 0) {
+        setResults(storageService.getResults());
+      }
+    }).catch(() => {});
+
+    // Live background polling setiap 15 detik
+    const timer = setInterval(() => {
+      sheetsSyncService.pullResultsFromSheets().then((pulled) => {
+        if (pulled && pulled.length > 0) {
+          setResults(storageService.getResults());
+        }
+      }).catch(() => {});
+    }, 15000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   // Sort descending by score, then ascending by duration
   const sorted = [...results].sort((a, b) => {
@@ -58,23 +93,29 @@ export const AdminResults: React.FC = () => {
     }
   };
 
-  const [isSyncing, setIsSyncing] = useState(false);
+  const handlePullFromSheets = async () => {
+    setIsPulling(true);
+    try {
+      const pulled = await sheetsSyncService.pullResultsFromSheets();
+      if (pulled && pulled.length > 0) {
+        setResults(storageService.getResults());
+        showToast(`Berhasil memuat ${pulled.length} data hasil ujian dari Google Spreadsheet!`, 'success');
+      } else {
+        showToast('Data hasil ujian di Google Spreadsheet kosong atau belum ada siswa yang selesai.', 'info');
+      }
+    } catch {
+      showToast('Gagal menarik hasil dari Google Spreadsheet.', 'error');
+    } finally {
+      setIsPulling(false);
+    }
+  };
 
   const handleSyncToSheets = async () => {
     setIsSyncing(true);
     try {
-      const participants = storageService.getParticipants();
       const allResults = storageService.getResults();
-      const exams = storageService.getExams();
-      const questions = storageService.getQuestions();
-
-      await sheetsSyncService.exportAll({
-        participants,
-        results: allResults,
-        exams,
-        questions,
-      });
-      showToast(`${results.length} data hasil ujian & bank soal berhasil dikirim ke Google Spreadsheet!`, 'success');
+      await sheetsSyncService.syncResults(allResults);
+      showToast(`${allResults.length} data hasil ujian berhasil dikirim ke Google Spreadsheet (Sheet: HASIL_UJIAN)!`, 'success');
     } catch {
       showToast('Gagal mengirim data ke Google Spreadsheet.', 'error');
     } finally {
@@ -99,10 +140,16 @@ export const AdminResults: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Award className="w-5 h-5 text-[#087443]" />
-            <span>Hasil & Peringkat Peserta</span>
-          </h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
+              <Award className="w-5 h-5 text-[#087443]" />
+              <span>Hasil & Peringkat Peserta</span>
+            </h2>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-semibold bg-[#EAF8F0] text-emerald-900 border border-emerald-300">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Terkoneksi Sheet: HASIL_UJIAN</span>
+            </span>
+          </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
             Rekapitulasi otomatis skor CBT: Benar / Total × 100 dengan verifikasi kombinasi PG & PGK.
           </p>
@@ -111,23 +158,34 @@ export const AdminResults: React.FC = () => {
         <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
           <button
             type="button"
-            onClick={handleCopyResults}
-            className="flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer"
-            title="Salin tabel hasil ujian ke clipboard untuk di-paste langsung (Ctrl+V) ke Google Sheets"
+            onClick={handlePullFromSheets}
+            disabled={isPulling}
+            className="flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer disabled:opacity-50"
+            title="Tarik data nilai terbaru dari Google Spreadsheet"
           >
-            <Copy className="w-3.5 h-3.5 text-slate-500" />
-            <span>Salin (Ctrl+V)</span>
+            <RefreshCw className={`w-3.5 h-3.5 text-emerald-700 ${isPulling ? 'animate-spin' : ''}`} />
+            <span>{isPulling ? 'Menarik...' : 'Tarik dari Sheets'}</span>
           </button>
 
           <button
             type="button"
             onClick={handleSyncToSheets}
             disabled={isSyncing}
-            className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 bg-emerald-800 hover:bg-emerald-900 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-50 shadow-2xs"
             title="Kirim semua data hasil ujian ke Google Spreadsheet via Web App"
           >
-            <Send className="w-3.5 h-3.5 text-emerald-700" />
-            <span>{isSyncing ? 'Mengirim...' : 'Kirim ke Spreadsheet'}</span>
+            <Send className="w-3.5 h-3.5" />
+            <span>{isSyncing ? 'Mengirim...' : 'Kirim ke Sheets'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleCopyResults}
+            className="flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-3 py-2 rounded-lg text-xs font-medium transition cursor-pointer"
+            title="Salin tabel hasil ujian ke clipboard untuk di-paste langsung (Ctrl+V) ke Google Sheets"
+          >
+            <Copy className="w-3.5 h-3.5 text-slate-500" />
+            <span>Salin (Ctrl+V)</span>
           </button>
 
           <button

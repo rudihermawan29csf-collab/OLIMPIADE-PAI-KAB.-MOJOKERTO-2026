@@ -138,7 +138,63 @@ export const sheetsSyncService = {
   },
 
   async fetchViaJsonp<T>(action: string): Promise<T | null> {
-    return this.fetchFromSheets<T>(action);
+    const url = this.getUrl();
+    if (!url || typeof window === 'undefined') return null;
+
+    return new Promise((resolve) => {
+      const callbackName = `cbt_cb_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      let resolved = false;
+
+      const cleanup = () => {
+        try {
+          delete (window as any)[callbackName];
+          const el = document.getElementById(callbackName);
+          if (el && el.parentNode) {
+            el.parentNode.removeChild(el);
+          }
+        } catch {}
+      };
+
+      const timer = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          cleanup();
+          this.fetchFromSheets<T>(action).then(resolve).catch(() => resolve(null));
+        }
+      }, 7000);
+
+      (window as any)[callbackName] = (data: T) => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timer);
+          cleanup();
+          resolve(data);
+        }
+      };
+
+      try {
+        const sep = url.includes('?') ? '&' : '?';
+        const script = document.createElement('script');
+        script.id = callbackName;
+        script.src = `${url}${sep}action=${action}&callback=${callbackName}&_t=${Date.now()}`;
+        script.onerror = () => {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timer);
+            cleanup();
+            this.fetchFromSheets<T>(action).then(resolve).catch(() => resolve(null));
+          }
+        };
+        document.head.appendChild(script);
+      } catch {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timer);
+          cleanup();
+          this.fetchFromSheets<T>(action).then(resolve).catch(() => resolve(null));
+        }
+      }
+    });
   },
 
   /**
@@ -215,26 +271,22 @@ export const sheetsSyncService = {
     if (!this.isConfigured()) return null;
     try {
       const resp = await this.fetchViaJsonp<{ status: string; results?: ExamResult[] }>('GET_RESULTS');
-      if (resp && resp.results && Array.isArray(resp.results) && resp.results.length > 0) {
-        const currentResults = storageService.getResults();
-        const merged = [...currentResults];
-        
-        resp.results.forEach((remoteResult) => {
-          const idx = merged.findIndex((r) => r.id === remoteResult.id);
-          if (idx >= 0) {
-            merged[idx] = remoteResult;
-          } else {
-            merged.push(remoteResult);
-          }
-        });
-
-        localStorage.setItem('mgmp_cbt_results', JSON.stringify(merged));
+      if (resp && resp.results && Array.isArray(resp.results)) {
+        storageService.saveResults(resp.results);
         return resp.results;
       }
     } catch (err) {
       console.warn('Gagal menarik hasil dari Google Spreadsheet:', err);
     }
     return null;
+  },
+
+  /**
+   * Sinkronisasi seluruh Hasil Ujian (Banyak / Rekap) ke Google Spreadsheet
+   */
+  async syncResults(results: ExamResult[]): Promise<boolean> {
+    if (!this.isConfigured()) return false;
+    return this.sendPayload('SYNC_RESULTS', results);
   },
 
   /**

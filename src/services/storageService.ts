@@ -897,6 +897,15 @@ export const storageService = {
     if (!examId) return list;
     return list.filter((r) => r.examId === examId);
   },
+  saveResults(results: ExamResult[]): void {
+    if (!results || !Array.isArray(results) || results.length === 0) return;
+    const current = this.getResults();
+    const map = new Map<string, ExamResult>();
+    current.forEach((r) => map.set(r.id, r));
+    results.forEach((r) => map.set(r.id, r));
+    const merged = Array.from(map.values());
+    setToStorage(KEYS.RESULTS, merged);
+  },
 
   getResultByParticipantId(participantId: string): ExamResult | undefined {
     return this.getResults().find((r) => r.participantId === participantId);

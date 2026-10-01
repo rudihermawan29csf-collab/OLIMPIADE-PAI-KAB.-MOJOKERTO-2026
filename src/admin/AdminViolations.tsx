@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ViolationLog } from '../types';
-import { storageService } from '../services/storageService';
+import { storageService, subscribeToStore } from '../services/storageService';
 import { sheetsSyncService } from '../services/sheetsSyncService';
 import { sheetsExportService } from '../services/sheetsExportService';
 import { useToast } from '../components/Toast';
@@ -27,15 +27,33 @@ export const AdminViolations: React.FC = () => {
   const [isPulling, setIsPulling] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Tarik data pelanggaran terbaru dari Google Spreadsheet saat halaman dibuka
+  // Subscribe ke perubahan data lokal
   useEffect(() => {
-    if (sheetsSyncService.isConfigured()) {
+    const unsub = subscribeToStore(() => {
+      setViolations(storageService.getViolations());
+    });
+    return () => unsub();
+  }, []);
+
+  // Tarik data pelanggaran terbaru dari Google Spreadsheet saat halaman dibuka & auto polling
+  useEffect(() => {
+    if (!sheetsSyncService.isConfigured()) return;
+
+    sheetsSyncService.pullViolationsFromSheets().then((pulled) => {
+      if (pulled && pulled.length > 0) {
+        setViolations(storageService.getViolations());
+      }
+    }).catch(() => {});
+
+    const timer = setInterval(() => {
       sheetsSyncService.pullViolationsFromSheets().then((pulled) => {
         if (pulled && pulled.length > 0) {
           setViolations(storageService.getViolations());
         }
       }).catch(() => {});
-    }
+    }, 12000);
+
+    return () => clearInterval(timer);
   }, []);
 
   const handleSyncToSheets = async () => {
