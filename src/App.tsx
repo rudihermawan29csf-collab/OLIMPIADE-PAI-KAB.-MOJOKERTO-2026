@@ -88,9 +88,16 @@ function MainAppContent() {
   };
 
   // Handler: Student successfully identified
-  const handleStudentLoginSuccess = (participant: Participant, isResume: boolean) => {
+  const handleStudentLoginSuccess = (participant: Participant, isResume: boolean, exam?: Exam) => {
     setStudent(participant);
     setIsResumeMode(isResume);
+
+    if (exam) {
+      setActiveExam(exam);
+    } else if (participant.examId) {
+      const found = storageService.getExamById(participant.examId);
+      if (found) setActiveExam(found);
+    }
 
     if (isResume && participant.status === 'active') {
       setCurrentView('student_cbt');
@@ -194,10 +201,10 @@ function MainAppContent() {
           />
         )}
 
-        {currentView === 'student_confirm' && studentSession && activeExam && (
+        {currentView === 'student_confirm' && studentSession && (
           <ExamConfirmation
             participant={studentSession}
-            exam={activeExam}
+            exam={storageService.getExamById(studentSession.examId) || activeExam || storageService.getActiveExam()!}
             isResume={isResumeMode}
             onStartExam={handleStartExam}
             onCancel={() => {
@@ -207,19 +214,19 @@ function MainAppContent() {
           />
         )}
 
-        {currentView === 'student_cbt' && studentSession && activeExam && (
+        {currentView === 'student_cbt' && studentSession && (
           <CbtExamRoom
             participant={studentSession}
-            exam={activeExam}
+            exam={storageService.getExamById(studentSession.examId) || activeExam || storageService.getActiveExam()!}
             onFinishExam={handleExamFinish}
             onDisqualified={handleExamDisqualified}
           />
         )}
 
-        {currentView === 'student_finish' && examResult && activeExam && (
+        {currentView === 'student_finish' && examResult && (
           <ExamFinish
             result={examResult}
-            exam={activeExam}
+            exam={storageService.getExamById(examResult.examId) || activeExam || storageService.getActiveExam()!}
             onReturnHome={handleReturnHome}
           />
         )}

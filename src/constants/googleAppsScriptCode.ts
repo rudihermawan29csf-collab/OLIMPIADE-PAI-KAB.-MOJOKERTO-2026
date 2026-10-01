@@ -269,31 +269,75 @@ function getExamsFromSheet(ss) {
   return list;
 }
 
-// 3. Ambil Bank Soal
+// 3. Ambil Bank Soal (Mendukung mapping kolom dinamis & toleran berbagai format header spreadsheet)
 function getQuestionsFromSheet(ss) {
-  var sheet = ss.getSheetByName(SHEET_BANK_SOAL);
+  var sheet = ss.getSheetByName(SHEET_BANK_SOAL) ||
+              ss.getSheetByName('BANK SOAL') ||
+              ss.getSheetByName('SOAL') ||
+              ss.getSheetByName('SOAL_UJIAN') ||
+              ss.getSheetByName('BANK_SOAL_PAI') ||
+              ss.getSheetByName('Sheet1');
   if (!sheet) return [];
   var values = sheet.getDataRange().getValues();
   if (values.length <= 1) return [];
 
+  var headers = values[0].map(function(h) { return String(h || '').toLowerCase().trim(); });
+
+  function findCol(keywords, fallback) {
+    for (var c = 0; c < headers.length; c++) {
+      for (var k = 0; k < keywords.length; k++) {
+        if (headers[c].indexOf(keywords[k]) !== -1) return c;
+      }
+    }
+    return fallback;
+  }
+
+  var cId = findCol(['id', 'nomor', 'no'], 0);
+  var cType = findCol(['tipe', 'type', 'jenis', 'bentuk'], 1);
+  var cTopic = findCol(['topik', 'materi', 'kompetensi', 'bab'], 2);
+  var cDiff = findCol(['kesulitan', 'tingkat', 'level', 'difficulty'], 3);
+  var cQuestion = findCol(['pertanyaan', 'butir', 'soal', 'stimulus', 'text'], 4);
+  var cOptA = findCol(['opsi a', 'pilihan a', 'opt a'], 5);
+  var cOptB = findCol(['opsi b', 'pilihan b', 'opt b'], 6);
+  var cOptC = findCol(['opsi c', 'pilihan c', 'opt c'], 7);
+  var cOptD = findCol(['opsi d', 'pilihan d', 'opt d'], 8);
+  var cKey = findCol(['kunci', 'jawaban', 'correct', 'key'], 9);
+  var cExp = findCol(['pembahasan', 'penjelasan', 'alasan', 'explanation'], 10);
+
+  // Cek jika header kolom berupa huruf tunggal (A, B, C, D)
+  for (var hIdx = 0; hIdx < headers.length; hIdx++) {
+    if (headers[hIdx] === 'a') cOptA = hIdx;
+    if (headers[hIdx] === 'b') cOptB = hIdx;
+    if (headers[hIdx] === 'c') cOptC = hIdx;
+    if (headers[hIdx] === 'd') cOptD = hIdx;
+  }
+
   var list = [];
   for (var i = 1; i < values.length; i++) {
     var row = values[i];
-    if (!row[0] && !row[4]) continue;
+    var qText = String((cQuestion >= 0 ? row[cQuestion] : row[4]) || '').trim();
+    var qId = String((cId >= 0 ? row[cId] : row[0]) || '').trim();
+    if (!qText && !qId) continue;
 
-    var qType = String(row[1] || 'PG').toUpperCase().trim();
-    var optA = row[5] ? String(row[5]) : '';
-    var optB = row[6] ? String(row[6]) : '';
-    var optC = row[7] ? String(row[7]) : '';
-    var optD = row[8] ? String(row[8]) : '';
+    var qType = String((cType >= 0 ? row[cType] : row[1]) || 'PG').toUpperCase().trim();
+    if (qType !== 'PG' && qType !== 'PGK' && qType !== 'BS') {
+      qType = 'PG';
+    }
+
+    var optA = String((cOptA >= 0 ? row[cOptA] : row[5]) || '').trim();
+    var optB = String((cOptB >= 0 ? row[cOptB] : row[6]) || '').trim();
+    var optC = String((cOptC >= 0 ? row[cOptC] : row[7]) || '').trim();
+    var optD = String((cOptD >= 0 ? row[cOptD] : row[8]) || '').trim();
+
     var options = [];
     if (optA) options.push({ id: 'A', text: optA });
     if (optB) options.push({ id: 'B', text: optB });
     if (optC) options.push({ id: 'C', text: optC });
     if (optD) options.push({ id: 'D', text: optD });
 
-    var rawAnswers = row[9] ? String(row[9]).split(',') : ['A'];
-    var correctAnswers = rawAnswers.map(function(s) { return s.trim(); });
+    var rawAnswers = String((cKey >= 0 ? row[cKey] : row[9]) || 'A').split(',');
+    var correctAnswers = rawAnswers.map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });
+    if (correctAnswers.length === 0) correctAnswers = ['A'];
 
     var statements = undefined;
     if (qType === 'BS') {
@@ -317,16 +361,16 @@ function getQuestionsFromSheet(ss) {
     }
 
     list.push({
-      id: String(row[0] || ('Q-' + i)),
+      id: qId || ('q-' + i),
       type: qType,
       subject: 'Pendidikan Agama Islam',
-      topic: row[2] || 'Materi PAI',
-      difficulty: row[3] || 'Sedang',
-      question: String(row[4] || ''),
+      topic: String((cTopic >= 0 ? row[cTopic] : row[2]) || 'Materi PAI').trim(),
+      difficulty: String((cDiff >= 0 ? row[cDiff] : row[3]) || 'Sedang').trim(),
+      question: qText || ('Pertanyaan Nomor ' + i),
       options: options,
       statements: statements,
       correctAnswers: correctAnswers,
-      explanation: String(row[10] || ''),
+      explanation: String((cExp >= 0 ? row[cExp] : row[10]) || '').trim(),
       isActive: true,
       createdAt: new Date().toISOString()
     });

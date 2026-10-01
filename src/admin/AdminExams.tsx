@@ -555,9 +555,13 @@ export const AdminExams: React.FC = () => {
     setStartAtLocal(toDateTimeLocal(e.startAt));
     setEndAtLocal(toDateTimeLocal(e.endAt));
 
-    const ids = e.selectedQuestionIds && e.selectedQuestionIds.length > 0
+    const rawIds = e.selectedQuestionIds && e.selectedQuestionIds.length > 0
       ? e.selectedQuestionIds
       : storageService.getQuestions().filter((q) => q.isActive).slice(0, e.questionCount || 10).map((q) => q.id);
+
+    const ids = (e.questionCount && e.questionCount > 0 && rawIds.length > e.questionCount)
+      ? rawIds.slice(0, e.questionCount)
+      : rawIds;
 
     setSelectedQuestionIds(ids);
 

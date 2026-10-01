@@ -219,80 +219,49 @@ export const storageService = {
       isNew = true;
     }
 
-    // 1. Otomatis ikutsertakan dan perbarui butir soal di sesi ujian aktif agar langsung muncul di HP/komputer siswa
-    const exams = this.getExams();
-    let examChanged = false;
-    exams.forEach((ex) => {
-      if (ex.status === 'active' || ex.status === 'scheduled') {
-        if (!ex.selectedQuestionIds) {
-          ex.selectedQuestionIds = [];
-        }
-        if (saved.isActive) {
-          if (!ex.selectedQuestionIds.includes(saved.id)) {
-            ex.selectedQuestionIds.push(saved.id);
-          }
-        } else {
-          ex.selectedQuestionIds = ex.selectedQuestionIds.filter((qid) => qid !== saved.id);
-        }
-
-        const allQ = list;
-        const selectedQ = ex.selectedQuestionIds
-          .map((id) => allQ.find((q) => q.id === id))
-          .filter((q): q is Question => !!q && q.isActive);
-
-        ex.selectedQuestionIds = selectedQ.map((q) => q.id);
-        ex.questionCount = selectedQ.length;
-        ex.pgCount = selectedQ.filter((q) => q.type === 'PG').length;
-        ex.pgkCount = selectedQ.filter((q) => q.type === 'PGK').length;
-        ex.bsCount = selectedQ.filter((q) => q.type === 'BS').length;
-        examChanged = true;
-      }
-    });
-
-    if (examChanged) {
-      setToStorage(KEYS.EXAMS, exams);
-      sheetsSyncService.syncExams(exams).catch(() => {});
-    }
-
-    // 2. Otomatis sinkronkan Bank Soal terbaru ke Google Spreadsheet (Sheet: BANK_SOAL)
+    // Sinkronkan Bank Soal terbaru ke Google Spreadsheet (Sheet: BANK_SOAL)
     sheetsSyncService.syncQuestions(list).catch(() => {});
 
     return saved;
   },
-  saveQuestions(questions: Question[]): void {
+  saveQuestions(questions: Question[], replace = false): void {
     if (!questions || !Array.isArray(questions) || questions.length === 0) return;
-    const existing = this.getQuestions();
-    const map = new Map<string, Question>();
-    existing.forEach((q) => map.set(q.id, q));
-    questions.forEach((q) => map.set(q.id, q));
-    const merged = Array.from(map.values());
-    setToStorage(KEYS.QUESTIONS, merged);
+    if (replace) {
+      setToStorage(KEYS.QUESTIONS, questions);
+    } else {
+      const existing = this.getQuestions();
+      const map = new Map<string, Question>();
+      existing.forEach((q) => map.set(q.id, q));
+      questions.forEach((q) => map.set(q.id, q));
+      const merged = Array.from(map.values());
+      setToStorage(KEYS.QUESTIONS, merged);
+    }
 
-    // Otomatis masukkan butir soal aktif dari spreadsheet ke sesi ujian
+    // Perbarui sesi ujian agar mengacu pada ID butir soal terbaru dari spreadsheet
     const exams = this.getExams();
     let examChanged = false;
+    const newQIds = new Set(questions.map((q) => q.id));
+
     exams.forEach((ex) => {
-      if (ex.status === 'active' || ex.status === 'scheduled') {
-        if (!ex.selectedQuestionIds) ex.selectedQuestionIds = [];
-        merged.forEach((q) => {
-          if (q.isActive && !ex.selectedQuestionIds!.includes(q.id)) {
-            ex.selectedQuestionIds!.push(q.id);
-          }
-        });
-        const selectedQ = ex.selectedQuestionIds
-          .map((id) => merged.find((q) => q.id === id))
-          .filter((q): q is Question => !!q && q.isActive);
-        ex.selectedQuestionIds = selectedQ.map((q) => q.id);
-        ex.questionCount = selectedQ.length;
-        ex.pgCount = selectedQ.filter((q) => q.type === 'PG').length;
-        ex.pgkCount = selectedQ.filter((q) => q.type === 'PGK').length;
-        ex.bsCount = selectedQ.filter((q) => q.type === 'BS').length;
+      if (ex.selectedQuestionIds && ex.selectedQuestionIds.length > 0) {
+        const validIds = ex.selectedQuestionIds.filter((id) => newQIds.has(id));
+        if (validIds.length === 0) {
+          const count = Math.min(ex.questionCount || 10, questions.length);
+          ex.selectedQuestionIds = questions.slice(0, count).map((q) => q.id);
+          examChanged = true;
+        } else if (validIds.length !== ex.selectedQuestionIds.length) {
+          ex.selectedQuestionIds = validIds;
+          examChanged = true;
+        }
+      } else {
+        const count = Math.min(ex.questionCount || 10, questions.length);
+        ex.selectedQuestionIds = questions.slice(0, count).map((q) => q.id);
         examChanged = true;
       }
     });
+
     if (examChanged) {
       setToStorage(KEYS.EXAMS, exams);
-      sheetsSyncService.syncExams(exams).catch(() => {});
     }
   },
   deleteQuestion(id: string): void {
@@ -336,36 +305,12 @@ export const storageService = {
     list.unshift(duplicated);
     setToStorage(KEYS.QUESTIONS, list);
 
-    // Ikutsertakan ke sesi ujian
-    const exams = this.getExams();
-    let examChanged = false;
-    exams.forEach((ex) => {
-      if (ex.status === 'active' || ex.status === 'scheduled') {
-        if (!ex.selectedQuestionIds) ex.selectedQuestionIds = [];
-        ex.selectedQuestionIds.push(duplicated.id);
-        const selectedQ = ex.selectedQuestionIds
-          .map((qid) => list.find((q) => q.id === qid))
-          .filter((q): q is Question => !!q && q.isActive);
-        ex.selectedQuestionIds = selectedQ.map((q) => q.id);
-        ex.questionCount = selectedQ.length;
-        ex.pgCount = selectedQ.filter((q) => q.type === 'PG').length;
-        ex.pgkCount = selectedQ.filter((q) => q.type === 'PGK').length;
-        ex.bsCount = selectedQ.filter((q) => q.type === 'BS').length;
-        examChanged = true;
-      }
-    });
-    if (examChanged) {
-      setToStorage(KEYS.EXAMS, exams);
-      sheetsSyncService.syncExams(exams).catch(() => {});
-    }
-
     sheetsSyncService.syncQuestions(list).catch(() => {});
     return duplicated;
   },
   importQuestions(importedQuestions: Omit<Question, 'id' | 'createdAt'>[]): number {
     const list = this.getQuestions();
     let count = 0;
-    const newIds: string[] = [];
     for (const q of importedQuestions) {
       const newId = `q-${Date.now()}-${Math.random().toString(36).substring(2, 6)}-${count}`;
       list.push({
@@ -373,30 +318,9 @@ export const storageService = {
         id: newId,
         createdAt: new Date().toISOString(),
       });
-      newIds.push(newId);
       count++;
     }
     setToStorage(KEYS.QUESTIONS, list);
-
-    // Otomatis masukkan butir impor ke sesi ujian
-    const exams = this.getExams();
-    let examChanged = false;
-    exams.forEach((ex) => {
-      if (ex.status === 'active' || ex.status === 'scheduled') {
-        if (!ex.selectedQuestionIds) ex.selectedQuestionIds = [];
-        newIds.forEach((nid) => {
-          if (!ex.selectedQuestionIds!.includes(nid)) {
-            ex.selectedQuestionIds!.push(nid);
-          }
-        });
-        ex.questionCount = ex.selectedQuestionIds.length;
-        examChanged = true;
-      }
-    });
-    if (examChanged) {
-      setToStorage(KEYS.EXAMS, exams);
-      sheetsSyncService.syncExams(exams).catch(() => {});
-    }
 
     sheetsSyncService.syncQuestions(list).catch(() => {});
     return count;
@@ -409,42 +333,36 @@ export const storageService = {
   getExamById(id: string): Exam | undefined {
     return this.getExams().find((e) => e.id === id);
   },
-  getActiveExam(): Exam | undefined {
+  getActiveExam(token?: string): Exam | undefined {
     const exams = this.getExams();
-    const exam = exams.find((e) => e.status === 'active');
-    if (!exam) return undefined;
+    if (!exams || exams.length === 0) return undefined;
 
-    // Pastikan butir soal aktif dari Bank Soal terangkum akurat
-    const activeQuestions = this.getQuestions().filter((q) => q.isActive);
-    const existingIds = new Set(exam.selectedQuestionIds || []);
-    let needsUpdate = false;
-
-    activeQuestions.forEach((q) => {
-      if (!existingIds.has(q.id)) {
-        existingIds.add(q.id);
-        needsUpdate = true;
-      }
-    });
-
-    if (needsUpdate) {
-      const allSelected = Array.from(existingIds);
-      const selectedQ = allSelected
-        .map((id) => activeQuestions.find((q) => q.id === id))
-        .filter((q): q is Question => !!q);
-
-      exam.selectedQuestionIds = allSelected;
-      exam.questionCount = allSelected.length;
-      exam.pgCount = selectedQ.filter((q) => q.type === 'PG').length;
-      exam.pgkCount = selectedQ.filter((q) => q.type === 'PGK').length;
-      exam.bsCount = selectedQ.filter((q) => q.type === 'BS').length;
-      try {
-        localStorage.setItem(KEYS.EXAMS, JSON.stringify(exams));
-      } catch (e) {
-        console.error('Error saving exams silently:', e);
-      }
+    // 1. Jika token dicocokkan, prioritaskan sesi yang persis memiliki token tersebut
+    if (token && token.trim()) {
+      const cleanToken = token.trim().toUpperCase();
+      const matched = exams.find((e) => (e.token || '').trim().toUpperCase() === cleanToken);
+      if (matched) return matched;
     }
 
-    return exam;
+    // 2. Prioritaskan sesi 'active' yang saat ini sedang berlangsung sesuai rentang waktu (startAt s.d. endAt)
+    const now = Date.now();
+    const currentlyRunning = exams.find((e) => {
+      if (e.status !== 'active') return false;
+      const s = new Date(e.startAt).getTime();
+      const end = new Date(e.endAt).getTime();
+      return !isNaN(s) && !isNaN(end) && now >= s && now <= end;
+    });
+    if (currentlyRunning) return currentlyRunning;
+
+    // 3. Sesi aktif lainnya
+    const anyActive = exams.find((e) => e.status === 'active');
+    if (anyActive) return anyActive;
+
+    // 4. Sesi terjadwal ('scheduled')
+    const anyScheduled = exams.find((e) => e.status === 'scheduled');
+    if (anyScheduled) return anyScheduled;
+
+    return exams[0];
   },
   saveExam(exam: Omit<Exam, 'id' | 'createdAt'> & { id?: string }): Exam {
     const list = this.getExams();
@@ -867,18 +785,22 @@ export const storageService = {
     let wrongCount = 0;
     let unansweredCount = 0;
 
-    // Use exam selected question IDs if specified, otherwise fall back to breakdown or count
+    // Gunakan butir soal yang telah disetting pada sesi ujian ini
     let examQuestions: Question[] = [];
     if (exam.selectedQuestionIds && exam.selectedQuestionIds.length > 0) {
-      const picked = exam.selectedQuestionIds
+      examQuestions = exam.selectedQuestionIds
         .map((id) => allQuestions.find((q) => q.id === id))
         .filter((q): q is Question => !!q && q.isActive);
-      const newlyAdded = allQuestions.filter((q) => q.isActive && !exam.selectedQuestionIds!.includes(q.id));
-      examQuestions = [...picked, ...newlyAdded];
     }
 
     if (examQuestions.length === 0) {
-      examQuestions = allQuestions.filter((q) => q.isActive);
+      const activeQ = allQuestions.filter((q) => q.isActive);
+      const count = Math.min(exam.questionCount || 10, activeQ.length);
+      examQuestions = activeQ.slice(0, count);
+    }
+
+    if (exam.questionCount && exam.questionCount > 0 && examQuestions.length > exam.questionCount) {
+      examQuestions = examQuestions.slice(0, exam.questionCount);
     }
     const totalExamQuestions = examQuestions.length;
 
@@ -990,12 +912,8 @@ export const storageService = {
         .map((id) => allQ.find((q) => q.id === id))
         .filter((q): q is Question => !!q && q.isActive);
 
-      // Pastikan butir soal aktif baru yang ada di bank soal juga diikutsertakan
-      const newlyAdded = activeQuestions.filter((q) => !exam.selectedQuestionIds!.includes(q.id));
-      const combined = [...picked, ...newlyAdded];
-
-      if (combined.length > 0) {
-        selected = (randomQuestion || exam.randomQuestion) ? shuffleArray(combined) : combined;
+      if (picked.length > 0) {
+        selected = (randomQuestion || exam.randomQuestion) ? shuffleArray(picked) : picked;
       }
     }
 
@@ -1027,13 +945,15 @@ export const storageService = {
           selected = shuffleArray(selected);
         }
       } else {
-        const count = Math.min(exam.questionCount, activeQuestions.length);
-        selected = [...activeQuestions];
-        if (randomQuestion || exam.randomQuestion) {
-          selected = shuffleArray(selected);
-        }
-        selected = selected.slice(0, count);
+        const count = Math.min(exam.questionCount || 10, activeQuestions.length);
+        const pool = (randomQuestion || exam.randomQuestion) ? shuffleArray(activeQuestions) : activeQuestions;
+        selected = pool.slice(0, count);
       }
+    }
+
+    // Pastikan jumlah soal yang tampil sesuai dengan questionCount yang ditentukan admin
+    if (exam.questionCount && exam.questionCount > 0 && selected.length > exam.questionCount) {
+      selected = selected.slice(0, exam.questionCount);
     }
 
     const questionMap: Record<string, Question> = {};

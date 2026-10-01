@@ -24,14 +24,16 @@ import {
 import { LOGO_KEMENAG_MOJOKERTO, LOGO_MGMP_PAI_MOJOKERTO } from '../constants/branding';
 
 interface StudentLoginProps {
-  onSuccess: (participant: Participant, isResume: boolean) => void;
+  onSuccess: (participant: Participant, isResume: boolean, exam?: Exam) => void;
   onOpenAdmin: () => void;
 }
 
 export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdmin }) => {
   const { showToast } = useToast();
   const [schools, setSchools] = useState<School[]>(() => storageService.getSchools());
+  const [exams, setExams] = useState<Exam[]>(() => storageService.getExams());
   const [activeExam, setActiveExam] = useState<Exam | undefined>(() => storageService.getActiveExam());
+  const [selectedExamId, setSelectedExamId] = useState<string>(() => storageService.getActiveExam()?.id || '');
 
   const [name, setName] = useState('');
   const [schoolName, setSchoolName] = useState('');
@@ -41,14 +43,17 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
 
-  // Subscribe to reactive store changes (soal baru langsung muncul)
+  // Subscribe to reactive store changes (jadwal & sesi baru langsung update)
   useEffect(() => {
     const unsub = subscribeToStore(() => {
+      const allExams = storageService.getExams();
+      setExams(allExams);
+      setSchools(storageService.getSchools());
       const current = storageService.getActiveExam();
       setActiveExam(current);
-      setSchools(storageService.getSchools());
-      if (current?.token) {
-        setTokenInput((prev) => (!prev || prev === 'PAI2026' ? current.token : prev));
+      if (current) {
+        setSelectedExamId(current.id);
+        setTokenInput(current.token);
       }
     });
     return () => unsub();
@@ -59,10 +64,13 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
     if (sheetsSyncService.isConfigured()) {
       sheetsSyncService.pullExamsFromSheets().then((pulled) => {
         if (pulled && pulled.length > 0) {
+          const allExams = storageService.getExams();
+          setExams(allExams);
           const current = storageService.getActiveExam();
           setActiveExam(current);
-          if (current?.token) {
-            setTokenInput((prev) => (!prev || prev === 'PAI2026' ? current.token : prev));
+          if (current) {
+            setSelectedExamId(current.id);
+            setTokenInput(current.token);
           }
         }
       }).catch(() => {});
@@ -87,18 +95,24 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
     e.preventDefault();
     setError(null);
 
-    if (!activeExam) {
+    const currentExams = storageService.getExams();
+    const targetExam =
+      currentExams.find((x) => x.id === selectedExamId) ||
+      storageService.getActiveExam(tokenInput) ||
+      activeExam;
+
+    if (!targetExam) {
       setError('Tidak ada jadwal ujian yang aktif saat ini. Silakan hubungi Panitia / Pengawas Ruang.');
       return;
     }
 
     // Periksa tanggal dan jam ujian
     const now = Date.now();
-    const startTime = new Date(activeExam.startAt).getTime();
-    const endTime = new Date(activeExam.endAt).getTime();
+    const startTime = new Date(targetExam.startAt).getTime();
+    const endTime = new Date(targetExam.endAt).getTime();
 
     if (!isNaN(startTime) && now < startTime) {
-      const startStr = new Date(activeExam.startAt).toLocaleString('id-ID', {
+      const startStr = new Date(targetExam.startAt).toLocaleString('id-ID', {
         weekday: 'long',
         day: 'numeric',
         month: 'long',
@@ -106,12 +120,12 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
         hour: '2-digit',
         minute: '2-digit',
       });
-      setError(`Sesi ujian belum dapat dilaksanakan. Sesi ujian baru akan dibuka pada ${startStr} WIB.`);
+      setError(`Sesi "${targetExam.title}" belum dapat dilaksanakan. Sesi ujian baru akan dibuka pada ${startStr} WIB.`);
       return;
     }
 
     if (!isNaN(endTime) && now > endTime) {
-      const endStr = new Date(activeExam.endAt).toLocaleString('id-ID', {
+      const endStr = new Date(targetExam.endAt).toLocaleString('id-ID', {
         weekday: 'long',
         day: 'numeric',
         month: 'long',
@@ -119,7 +133,7 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
         hour: '2-digit',
         minute: '2-digit',
       });
-      setError(`Sesi ujian telah ditutup pada ${endStr} WIB. Ujian sudah tidak dapat dilaksanakan.`);
+      setError(`Sesi "${targetExam.title}" telah ditutup pada ${endStr} WIB. Ujian sudah tidak dapat dilaksanakan.`);
       return;
     }
 
@@ -133,8 +147,8 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
       return;
     }
 
-    if (tokenInput.trim().toUpperCase() !== activeExam.token.trim().toUpperCase()) {
-      setError(`Token ujian tidak valid. Pastikan token sesuai dengan yang dirilis oleh Panitia/Pengawas (${activeExam.token}).`);
+    if (tokenInput.trim().toUpperCase() !== (targetExam.token || '').trim().toUpperCase()) {
+      setError(`Token ujian tidak valid. Pastikan token sesuai dengan yang dirilis oleh Panitia/Pengawas untuk sesi "${targetExam.title}" (${targetExam.token}).`);
       return;
     }
 
@@ -152,7 +166,7 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
         name: name.trim(),
         schoolId: finalSchoolId,
         schoolName: cleanSchoolName,
-        examId: activeExam.id,
+        examId: targetExam.id,
       });
 
       // Jika siswa sudah menyelesaikan ujian sebelumnya
@@ -164,7 +178,7 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
         return;
       }
 
-      onSuccess(result.participant, result.isResume);
+      onSuccess(result.participant, result.isResume, targetExam);
     } catch (err: any) {
       setError(err?.message || 'Gagal memulai sesi ujian.');
     } finally {
@@ -508,15 +522,48 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
                 </p>
               </div>
 
+              {/* Pilihan Sesi Ujian */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Sesi Ujian Yang Diikuti <span className="text-rose-500">*</span>
+                  </label>
+                  {exams.length > 1 && (
+                    <span className="text-[10px] text-emerald-800 font-medium">
+                      Tersedia {exams.length} sesi
+                    </span>
+                  )}
+                </div>
+                <select
+                  value={selectedExamId}
+                  onChange={(e) => {
+                    const newId = e.target.value;
+                    setSelectedExamId(newId);
+                    const found = exams.find((x) => x.id === newId);
+                    if (found) {
+                      setActiveExam(found);
+                      setTokenInput(found.token);
+                    }
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium text-slate-900 bg-white focus:outline-none focus:border-[#087443] focus:ring-1 focus:ring-[#087443] transition-colors"
+                >
+                  {exams.map((ex) => (
+                    <option key={ex.id} value={ex.id}>
+                      {ex.title} • {ex.questionCount} Soal • ({ex.durationMinutes} Menit)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Token Ujian (Auto-filled by active session) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-semibold text-slate-700">
-                    Token Ujian
+                    Token Ujian <span className="text-rose-500">*</span>
                   </label>
                   {activeExam && (
                     <span className="text-[10px] text-emerald-800 font-medium">
-                      Otomatis sesuai sesi aktif
+                      Otomatis sesuai sesi: <strong>{activeExam.token}</strong>
                     </span>
                   )}
                 </div>
@@ -524,7 +571,15 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
                   type="text"
                   required
                   value={tokenInput}
-                  onChange={(e) => setTokenInput(e.target.value.toUpperCase())}
+                  onChange={(e) => {
+                    const val = e.target.value.toUpperCase();
+                    setTokenInput(val);
+                    const matched = exams.find((x) => (x.token || '').trim().toUpperCase() === val.trim());
+                    if (matched) {
+                      setSelectedExamId(matched.id);
+                      setActiveExam(matched);
+                    }
+                  }}
                   placeholder="Token rilis ujian"
                   className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-mono font-bold tracking-wider uppercase text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#087443] focus:ring-1 focus:ring-[#087443] transition-colors bg-[#FAFDFB]"
                 />

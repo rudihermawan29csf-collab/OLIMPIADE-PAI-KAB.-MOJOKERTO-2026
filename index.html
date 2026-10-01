@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script>
+      window.onerror = function(msg, url, lineNo, columnNo, error) {
+        var str = (typeof msg === 'string' ? msg : '') || (error && error.message) || '';
+        if (str.indexOf('Script error') !== -1 || str === 'Script error.') {
+          return true; // Suppress cross-origin script error
+        }
+        return false;
+      };
       window.addEventListener('error', function(e) {
         if (!e) return;
         var msg = (typeof e === 'string' ? e : e.message) || '';

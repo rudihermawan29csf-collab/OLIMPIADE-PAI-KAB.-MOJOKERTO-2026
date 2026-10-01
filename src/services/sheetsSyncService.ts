@@ -100,79 +100,45 @@ export const sheetsSyncService = {
 
   /**
    * Mengambil data dari Google Apps Script secara aman
-   * Mengutamakan Fetch standard untuk menghindari "Script error." pada HTML redirect
+   * 100% menggunakan Fetch standard dengan AbortController dan parsing JSON aman.
+   * Tidak menggunakan tag <script> dinamis (JSONP) yang rentan menimbulkan 'Script error.' 
+   * saat endpoint dialihkan ke halaman login HTML atau offline.
    */
-  async fetchViaJsonp<T>(action: string): Promise<T | null> {
+  async fetchFromSheets<T>(action: string): Promise<T | null> {
     const url = this.getUrl();
-    if (!url || typeof document === 'undefined') return null;
+    if (!url || typeof window === 'undefined') return null;
 
     const sep = url.includes('?') ? '&' : '?';
 
-    // 1. Coba fetch standard terlebih dahulu (100% aman dari SyntaxError HTML & 'Script error.')
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
+      const timer = setTimeout(() => controller.abort(), 6000);
       const res = await fetch(`${url}${sep}action=${action}&_t=${Date.now()}`, {
         method: 'GET',
         headers: { Accept: 'application/json' },
         signal: controller.signal,
       });
       clearTimeout(timer);
+
       if (res.ok) {
         const text = await res.text();
         if (text && text.trim().startsWith('{')) {
-          return JSON.parse(text) as T;
+          try {
+            return JSON.parse(text) as T;
+          } catch {
+            return null;
+          }
         }
       }
     } catch {
-      // Fetch diblokir CORS / redirect login / offline - aman ditangani
+      // Fetch gagal / diblokir CORS / offline / dialihkan ke login Google - ditangani secara aman tanpa error global
     }
 
-    // Hindari fallback JSONP pada URL lama yang memerlukan login
-    // untuk mencegah browser mengeksekusi halaman login HTML sebagai JavaScript
-    if (PREV_APPS_SCRIPT_URLS.includes(url)) {
-      return null;
-    }
+    return null;
+  },
 
-    // 2. Fallback JSONP untuk custom Web App URL yang terpasang
-    return new Promise((resolve) => {
-      const callbackName = 'gscript_cb_' + Math.random().toString(36).substring(2, 9);
-      const script = document.createElement('script');
-      let timeoutId: any = null;
-      let isSettled = false;
-
-      const cleanup = () => {
-        if (isSettled) return;
-        isSettled = true;
-        clearTimeout(timeoutId);
-        try {
-          delete (window as any)[callbackName];
-        } catch {}
-        if (script.parentNode) {
-          try {
-            script.parentNode.removeChild(script);
-          } catch {}
-        }
-      };
-
-      (window as any)[callbackName] = (response: any) => {
-        cleanup();
-        resolve(response as T);
-      };
-
-      timeoutId = setTimeout(() => {
-        cleanup();
-        resolve(null);
-      }, 7000);
-
-      script.onerror = () => {
-        cleanup();
-        resolve(null);
-      };
-
-      script.src = `${url}${sep}action=${action}&callback=${callbackName}&_t=${Date.now()}`;
-      document.head.appendChild(script);
-    });
+  async fetchViaJsonp<T>(action: string): Promise<T | null> {
+    return this.fetchFromSheets<T>(action);
   },
 
   /**
@@ -233,7 +199,7 @@ export const sheetsSyncService = {
     try {
       const resp = await this.fetchViaJsonp<{ status: string; questions?: Question[] }>('GET_QUESTIONS');
       if (resp && resp.questions && Array.isArray(resp.questions) && resp.questions.length > 0) {
-        storageService.saveQuestions(resp.questions);
+        storageService.saveQuestions(resp.questions, true);
         return resp.questions;
       }
     } catch (err) {
