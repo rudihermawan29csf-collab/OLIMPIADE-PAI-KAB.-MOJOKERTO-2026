@@ -137,6 +137,22 @@ function setupSheets() {
 function getOrCreateSheet(ss, sheetName) {
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
+    // Toleran terhadap penamaan sheet oleh pengguna di Google Spreadsheet
+    if (sheetName === SHEET_SESI) {
+      sheet = ss.getSheetByName('SESI') || ss.getSheetByName('Sesi') || ss.getSheetByName('sesi') || ss.getSheetByName('SESI_UJIAN');
+    } else if (sheetName === SHEET_BANK_SOAL) {
+      sheet = ss.getSheetByName('SOAL') || ss.getSheetByName('Soal') || ss.getSheetByName('BANK_SOAL') || ss.getSheetByName('bank_soal');
+    } else if (sheetName === SHEET_SEKOLAH) {
+      sheet = ss.getSheetByName('SEKOLAH') || ss.getSheetByName('Sekolah') || ss.getSheetByName('DAFTAR_SEKOLAH');
+    } else if (sheetName === SHEET_HASIL) {
+      sheet = ss.getSheetByName('HASIL') || ss.getSheetByName('Hasil') || ss.getSheetByName('HASIL_UJIAN');
+    } else if (sheetName === SHEET_PELANGGARAN) {
+      sheet = ss.getSheetByName('PELANGGARAN') || ss.getSheetByName('Pelanggaran') || ss.getSheetByName('LOG_PELANGGARAN');
+    } else if (sheetName === SHEET_PESERTA) {
+      sheet = ss.getSheetByName('PESERTA') || ss.getSheetByName('Peserta');
+    }
+  }
+  if (!sheet) {
     sheet = ss.insertSheet(sheetName);
   }
   return sheet;
@@ -396,11 +412,22 @@ function getViolationsFromSheet(ss) {
  */
 function doPost(e) {
   try {
-    var json;
+    var json = null;
     if (e.parameter && e.parameter.payload) {
-      json = JSON.parse(e.parameter.payload);
+      json = typeof e.parameter.payload === 'string' ? JSON.parse(e.parameter.payload) : e.parameter.payload;
     } else if (e.postData && e.postData.contents) {
-      json = JSON.parse(e.postData.contents);
+      var contents = e.postData.contents;
+      if (contents.indexOf('payload=') === 0) {
+        var raw = decodeURIComponent(contents.substring(8).replace(/\+/g, ' '));
+        json = JSON.parse(raw);
+      } else {
+        json = JSON.parse(contents);
+      }
+    } else if (e.parameter && e.parameter.action) {
+      json = {
+        action: e.parameter.action,
+        data: e.parameter.data ? JSON.parse(e.parameter.data) : e.parameter
+      };
     } else {
       return responseJson({ status: 'error', error: 'Payload tidak ditemukan' });
     }
@@ -416,47 +443,47 @@ function doPost(e) {
     // 1. Sinkronisasi Sekolah
     if (action === 'SYNC_SCHOOLS') {
       saveSchools(ss, data);
-      return responseJson({ status: 'ok', message: 'Daftar sekolah tersimpan' });
+      return responseJson({ status: 'ok', message: 'Daftar sekolah tersimpan di sheet DAFTAR_SEKOLAH' });
     }
 
-    // 2. Sinkronisasi Sesi Ujian
-    if (action === 'SYNC_EXAMS' || action === 'SYNC_SESI') {
+    // 2. Sinkronisasi Sesi Ujian & Token
+    if (action === 'SYNC_EXAMS' || action === 'SYNC_SESI' || action === 'SYNC_SESSION') {
       saveExams(ss, data);
-      return responseJson({ status: 'ok', message: 'Sesi ujian tersimpan' });
+      return responseJson({ status: 'ok', message: 'Sesi ujian & token berhasil tersimpan di sheet SESI_UJIAN' });
     }
 
     // 3. Sinkronisasi Bank Soal
     if (action === 'SYNC_QUESTIONS') {
       saveQuestions(ss, data);
-      return responseJson({ status: 'ok', message: 'Bank soal tersimpan' });
+      return responseJson({ status: 'ok', message: 'Bank soal tersimpan di sheet BANK_SOAL' });
     }
 
     // 4. Sinkronisasi Peserta Ujian
     if (action === 'SYNC_PARTICIPANT') {
       saveOrUpdateParticipant(ss, data);
-      return responseJson({ status: 'ok', message: 'Peserta tersimpan' });
+      return responseJson({ status: 'ok', message: 'Peserta tersimpan di sheet PESERTA' });
     }
 
     // 5. Sinkronisasi Hasil Ujian Siswa
     if (action === 'SYNC_RESULT') {
       saveResult(ss, data.result, data.participant);
-      return responseJson({ status: 'ok', message: 'Hasil ujian tersimpan' });
+      return responseJson({ status: 'ok', message: 'Hasil ujian tersimpan di sheet HASIL_UJIAN' });
     }
 
     // 6. Sinkronisasi Log Pelanggaran Anti-Curang
     if (action === 'SYNC_VIOLATION') {
       saveViolation(ss, data);
-      return responseJson({ status: 'ok', message: 'Log pelanggaran tersimpan' });
+      return responseJson({ status: 'ok', message: 'Log pelanggaran tersimpan di sheet PELANGGARAN' });
     }
     if (action === 'SYNC_VIOLATIONS') {
       saveViolations(ss, data);
-      return responseJson({ status: 'ok', message: 'Seluruh pelanggaran tersimpan' });
+      return responseJson({ status: 'ok', message: 'Seluruh pelanggaran tersimpan di sheet PELANGGARAN' });
     }
 
     // 7. Ekspor Seluruh Database Sekaligus
     if (action === 'EXPORT_ALL') {
       exportAllData(ss, data);
-      return responseJson({ status: 'ok', message: 'Seluruh database berhasil diekspor' });
+      return responseJson({ status: 'ok', message: 'Seluruh 6 sheet database berhasil disinkronkan' });
     }
 
     return responseJson({ status: 'ignored', message: 'Aksi tidak dikenali: ' + action });
@@ -467,8 +494,23 @@ function doPost(e) {
 
 // Simpan / Timpa Daftar Sekolah
 function saveSchools(ss, schools) {
-  if (!schools || !Array.isArray(schools)) return;
+  if (!schools) return;
+  if (!Array.isArray(schools)) schools = [schools];
+  if (schools.length === 0) return;
+
   var sheet = getOrCreateSheet(ss, SHEET_SEKOLAH);
+
+  // Buat header otomatis jika sheet masih kosong
+  if (sheet.getLastRow() === 0 || String(sheet.getRange(1, 1).getValue()).trim() === '') {
+    sheet.getRange(1, 1, 1, 5).setValues([[
+      'ID Sekolah',
+      'Nama Sekolah (SMP/MTs)',
+      'NPSN',
+      'Alamat / Kecamatan',
+      'Terakhir Diperbarui'
+    ]]).setFontWeight('bold').setBackground('#E0F2FE').setFontColor('#0369A1');
+    sheet.setFrozenRows(1);
+  }
 
   var lastRow = sheet.getLastRow();
   if (lastRow > 1) {
@@ -490,10 +532,31 @@ function saveSchools(ss, schools) {
   }
 }
 
-// Simpan / Timpa Sesi Ujian
+// Simpan / Timpa Sesi Ujian & Token Rilis
 function saveExams(ss, exams) {
-  if (!exams || !Array.isArray(exams)) return;
+  if (!exams) return;
+  if (!Array.isArray(exams)) exams = [exams];
+  if (exams.length === 0) return;
+
   var sheet = getOrCreateSheet(ss, SHEET_SESI);
+
+  // Buat header otomatis jika sheet masih kosong
+  if (sheet.getLastRow() === 0 || String(sheet.getRange(1, 1).getValue()).trim() === '') {
+    sheet.getRange(1, 1, 1, 11).setValues([[
+      'ID Sesi',
+      'Judul Sesi Ujian',
+      'Token Rilis',
+      'Jumlah Soal',
+      'Durasi (Menit)',
+      'Waktu Mulai',
+      'Waktu Selesai',
+      'Status Sesi',
+      'Anti Cheat',
+      'Acak Soal',
+      'Terakhir Diperbarui'
+    ]]).setFontWeight('bold').setBackground('#FEF3C7').setFontColor('#92400E');
+    sheet.setFrozenRows(1);
+  }
 
   var lastRow = sheet.getLastRow();
   if (lastRow > 1) {
@@ -502,15 +565,15 @@ function saveExams(ss, exams) {
 
   var rows = exams.map(function(e) {
     var tokenClean = (e.token || 'PAI2026').toString().toUpperCase().trim();
-    var isRandom = (e.randomQuestion !== undefined ? e.randomQuestion : e.randomizeQuestions);
+    var isRandom = (e.randomQuestion !== undefined ? e.randomQuestion : (e.randomizeQuestions !== undefined ? e.randomizeQuestions : true));
     return [
       e.id || ('exam-' + Date.now()),
       e.title || 'OLIMPIADE PAI SMP KABUPATEN MOJOKERTO',
       tokenClean,
-      e.questionCount || 10,
-      e.durationMinutes || 90,
-      e.startAt || new Date().toISOString(),
-      e.endAt || new Date().toISOString(),
+      Number(e.questionCount || 10),
+      Number(e.durationMinutes || 90),
+      e.startAt ? new Date(e.startAt).toISOString() : new Date().toISOString(),
+      e.endAt ? new Date(e.endAt).toISOString() : new Date(Date.now() + 86400000 * 7).toISOString(),
       e.status || 'active',
       (e.antiCheat !== false) ? 'TRUE' : 'FALSE',
       (isRandom !== false) ? 'TRUE' : 'FALSE',
@@ -525,8 +588,29 @@ function saveExams(ss, exams) {
 
 // Simpan / Timpa Bank Soal
 function saveQuestions(ss, questions) {
-  if (!questions || !Array.isArray(questions) || questions.length === 0) return;
+  if (!questions) return;
+  if (!Array.isArray(questions)) questions = [questions];
+  if (questions.length === 0) return;
+
   var sheet = getOrCreateSheet(ss, SHEET_BANK_SOAL);
+
+  // Buat header otomatis jika sheet masih kosong
+  if (sheet.getLastRow() === 0 || String(sheet.getRange(1, 1).getValue()).trim() === '') {
+    sheet.getRange(1, 1, 1, 11).setValues([[
+      'ID Soal',
+      'Tipe Soal',
+      'Topik / Kompetensi',
+      'Tingkat Kesulitan',
+      'Butir Pertanyaan',
+      'Opsi A',
+      'Opsi B',
+      'Opsi C',
+      'Opsi D',
+      'Kunci Jawaban',
+      'Pembahasan'
+    ]]).setFontWeight('bold').setBackground('#EAF8F0').setFontColor('#087443');
+    sheet.setFrozenRows(1);
+  }
 
   var lastRow = sheet.getLastRow();
   if (lastRow > 1) {

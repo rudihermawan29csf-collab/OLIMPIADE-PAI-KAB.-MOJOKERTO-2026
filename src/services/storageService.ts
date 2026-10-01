@@ -603,10 +603,11 @@ export const storageService = {
     }
 
     const normalizedName = data.name.trim().toLowerCase();
+    const normalizedSchool = data.schoolName.trim().toLowerCase();
     const existing = list.find((p) => {
       if (p.examId !== data.examId) return false;
       const sameStudent =
-        p.schoolId === data.schoolId &&
+        (p.schoolId === data.schoolId || p.schoolName.trim().toLowerCase() === normalizedSchool) &&
         p.name.trim().toLowerCase() === normalizedName;
       const sameNumber =
         Boolean(data.participantNumber) &&
@@ -638,8 +639,28 @@ export const storageService = {
       return { participant: existing, isResume: true, alreadyCompleted: false };
     }
 
+    // Pastikan sekolah tercatat di master sekolah jika siswa mengetik nama sekolah baru
+    const allSchools = this.getSchools();
+    const existingSchool = allSchools.find(
+      (s) => s.name.trim().toLowerCase() === normalizedSchool
+    );
+    if (!existingSchool && data.schoolName.trim()) {
+      allSchools.push({
+        id: data.schoolId,
+        name: data.schoolName.trim(),
+        npsn: '-',
+        address: 'Kabupaten Mojokerto',
+        createdAt: new Date().toISOString(),
+      });
+      setToStorage(KEYS.SCHOOLS, allSchools);
+      sheetsSyncService.syncSchools(allSchools).catch(() => {});
+    }
+
     // Generate clean participant number if not provided
-    const cleanSchoolCode = data.schoolId.toUpperCase().replace(/[^A-Z0-9]/g, '') || 'SMP';
+    const cleanSchoolCode =
+      data.schoolName.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 8) ||
+      data.schoolId.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 8) ||
+      'SMP';
     const randomDigits = Math.floor(1000 + Math.random() * 9000);
     const generatedNumber = `PAI-${cleanSchoolCode}-${randomDigits}`;
 

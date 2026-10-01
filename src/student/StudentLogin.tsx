@@ -34,7 +34,7 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
   const [activeExam, setActiveExam] = useState<Exam | undefined>(() => storageService.getActiveExam());
 
   const [name, setName] = useState('');
-  const [schoolId, setSchoolId] = useState('');
+  const [schoolName, setSchoolName] = useState('');
   const [tokenInput, setTokenInput] = useState(() => storageService.getActiveExam()?.token || '');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -128,8 +128,8 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
       return;
     }
 
-    if (!schoolId) {
-      setError('Silakan pilih nama asal sekolah dari daftar.');
+    if (!schoolName.trim()) {
+      setError('Silakan masukkan nama asal sekolah (SMP / MTs).');
       return;
     }
 
@@ -138,15 +138,20 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
       return;
     }
 
-    const selectedSchool = schools.find((s) => s.id === schoolId);
-    const schoolName = selectedSchool ? selectedSchool.name : 'SMP';
+    const cleanSchoolName = schoolName.trim();
+    const matchedSchool = schools.find(
+      (s) => s.name.trim().toLowerCase() === cleanSchoolName.toLowerCase()
+    );
+    const finalSchoolId = matchedSchool
+      ? matchedSchool.id
+      : `sch-${cleanSchoolName.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'manual'}`;
 
     setIsSubmitting(true);
     try {
       const result = storageService.registerParticipant({
         name: name.trim(),
-        schoolId,
-        schoolName,
+        schoolId: finalSchoolId,
+        schoolName: cleanSchoolName,
         examId: activeExam.id,
       });
 
@@ -207,7 +212,7 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
   const handleCloseCompletedView = () => {
     setAlreadyCompletedData(null);
     setName('');
-    setSchoolId('');
+    setSchoolName('');
   };
 
   return (
@@ -475,24 +480,32 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
                 />
               </div>
 
-              {/* Asal Sekolah Dropdown */}
+              {/* Asal Sekolah (Ketik Manual) */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Asal Sekolah (SMP) <span className="text-rose-500">*</span>
+                  Asal Sekolah (SMP / MTs) <span className="text-rose-500">*</span>
                 </label>
-                <select
-                  required
-                  value={schoolId}
-                  onChange={(e) => setSchoolId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium bg-white text-slate-900 focus:outline-none focus:border-[#087443] focus:ring-1 focus:ring-[#087443] transition-colors"
-                >
-                  <option value="">-- Pilih Asal Sekolah SMP --</option>
-                  {schools.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    list="schools-datalist"
+                    value={schoolName}
+                    onChange={(e) => setSchoolName(e.target.value)}
+                    placeholder="Ketik asal sekolah (Contoh: SMPN 1 Puri / SMPN 3 Pacet / MTsN 1 Mojokerto)"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#087443] focus:ring-1 focus:ring-[#087443] transition-colors bg-white"
+                  />
+                  {schools.length > 0 && (
+                    <datalist id="schools-datalist">
+                      {schools.map((s) => (
+                        <option key={s.id} value={s.name} />
+                      ))}
+                    </datalist>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Ketik nama sekolah secara bebas (SMP / MTs Negeri atau Swasta). Saran otomatis akan muncul jika sesuai data.
+                </p>
               </div>
 
               {/* Token Ujian (Auto-filled by active session) */}

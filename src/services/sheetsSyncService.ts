@@ -2,10 +2,12 @@ import { Participant, ExamResult, ViolationLog, Question, School, Exam } from '.
 import { storageService } from './storageService';
 
 export const DEFAULT_APPS_SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbx_InSTl85DNt0EauMtqEXmXXwIkEcxVAuTfxtLCmKvA_CbiarWzKr8Tu3cikgo4pELPg/exec';
+  'https://script.google.com/macros/s/AKfycbxef0cMx4Uts99tztut9p2_XksOEwmJlCU74lJ66LIlNdoZyGVXb_0-CCEjAYCVk6gQ1Q/exec';
 
-const OLD_APPS_SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbzqWOwYOggXLgLmlCi_Gqm8DReSPxwEgKUtsJGoLgrkWn3o5cak9nhiXPB0YVJ-TP1Drg/exec';
+const PREV_APPS_SCRIPT_URLS = [
+  'https://script.google.com/macros/s/AKfycbx_InSTl85DNt0EauMtqEXmXXwIkEcxVAuTfxtLCmKvA_CbiarWzKr8Tu3cikgo4pELPg/exec',
+  'https://script.google.com/macros/s/AKfycbzqWOwYOggXLgLmlCi_Gqm8DReSPxwEgKUtsJGoLgrkWn3o5cak9nhiXPB0YVJ-TP1Drg/exec',
+];
 
 const STORAGE_KEY_APPS_SCRIPT_URL = 'PAI_APPS_SCRIPT_URL';
 
@@ -14,7 +16,7 @@ export const sheetsSyncService = {
     const saved = localStorage.getItem(STORAGE_KEY_APPS_SCRIPT_URL);
     if (saved !== null && saved !== undefined && saved.trim() !== '') {
       const clean = saved.trim();
-      if (clean === OLD_APPS_SCRIPT_URL) {
+      if (PREV_APPS_SCRIPT_URLS.includes(clean)) {
         localStorage.setItem(STORAGE_KEY_APPS_SCRIPT_URL, DEFAULT_APPS_SCRIPT_URL);
         return DEFAULT_APPS_SCRIPT_URL;
       }
@@ -126,9 +128,9 @@ export const sheetsSyncService = {
       // Fetch diblokir CORS / redirect login / offline - aman ditangani
     }
 
-    // Hanya gunakan fallback JSONP jika bukan URL default yang memerlukan login
+    // Hindari fallback JSONP pada URL lama yang memerlukan login
     // untuk mencegah browser mengeksekusi halaman login HTML sebagai JavaScript
-    if (url === DEFAULT_APPS_SCRIPT_URL || url === OLD_APPS_SCRIPT_URL) {
+    if (PREV_APPS_SCRIPT_URLS.includes(url)) {
       return null;
     }
 

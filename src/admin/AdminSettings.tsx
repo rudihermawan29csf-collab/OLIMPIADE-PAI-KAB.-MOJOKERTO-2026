@@ -664,15 +664,16 @@ export const AdminSettings: React.FC = () => {
                   3. Cara Pasang & Deploy di Google Apps Script (5 Menit):
                 </span>
                 <ol className="list-decimal pl-5 space-y-1.5 text-slate-600">
-                  <li>Buka <strong>Google Drive</strong> dan buat Google Spreadsheet baru dengan nama <code>DATABASE CBT OLIMPIADE PAI KAB. MOJOKERTO 2026</code>.</li>
+                  <li>Buka <strong>Google Drive</strong> dan buka Google Spreadsheet database ujian CBT.</li>
                   <li>Di menu atas spreadsheet, klik <strong>Ekstensi (Extensions)</strong> &gt; <strong>Apps Script</strong>.</li>
-                  <li>Hapus kode bawaan di <code>Code.gs</code>, lalu tempel kode yang sudah kami siapkan di bawah.</li>
-                  <li>Pilih fungsi <code>setupSheets</code> di dropdown toolbar lalu klik <strong>Jalankan (Run)</strong> untuk membuat semua sheet dan header secara otomatis.</li>
-                  <li>Klik tombol biru <strong>Terapkan (Deploy)</strong> &gt; <strong>Deployment Baru (New Deployment)</strong>:
-                    <ul className="list-disc pl-5 mt-1 space-y-0.5 text-slate-700">
-                      <li>Pilih jenis: <strong>Aplikasi Web (Web App)</strong></li>
-                      <li>Jalankan sebagai: <strong>Saya (email Anda)</strong></li>
-                      <li>Siapa yang memiliki akses: <strong>Siapa saja (Anyone)</strong> <em>(Wajib agar siswa dapat mengirim hasil)</em></li>
+                  <li>Hapus seluruh isi <code>Code.gs</code>, lalu tempel kode yang sudah kami perbarui di bawah.</li>
+                  <li>Pilih fungsi <code>setupSheets</code> di dropdown toolbar lalu klik <strong>Jalankan (Run)</strong> untuk membuat seluruh sheet (termasuk <code>SESI_UJIAN</code>, <code>DAFTAR_SEKOLAH</code>, <code>BANK_SOAL</code>, <code>PELANGGARAN</code>, <code>HASIL_UJIAN</code>).</li>
+                  <li>
+                    <strong>Langkah Kunci Penerapan (Deploy):</strong>
+                    <ul className="list-disc pl-5 mt-1 space-y-1 text-slate-700">
+                      <li><strong>Jika Baru Pertama Kali:</strong> Klik <strong>Terapkan (Deploy)</strong> &gt; <strong>Deployment Baru (New Deployment)</strong> &gt; Jenis: <strong>Aplikasi Web</strong> &gt; Akses: <strong>Siapa saja (Anyone)</strong>.</li>
+                      <li><strong className="text-amber-900 bg-amber-50 px-1 py-0.5 rounded border border-amber-300">Wajib jika Memperbarui Kode:</strong> Klik <strong>Terapkan (Deploy)</strong> &gt; <strong>Kelola Deployment (Manage Deployments)</strong> &gt; Klik ikon <strong>Pensil (Edit)</strong> &gt; Pada dropdown Versi pilih <strong>Versi Baru (New Version)</strong> &gt; Klik <strong>Terapkan (Deploy)</strong>. <em>(Jika tidak memilih Versi Baru, Google Sheets akan tetap menjalankan kode lama).</em></li>
+                      <li>Pastikan <strong>Siapa yang memiliki akses (Who has access)</strong> selalu disetel ke: <strong>Siapa saja (Anyone)</strong>.</li>
                     </ul>
                   </li>
                   <li>Salin <strong>URL Aplikasi Web (Web App URL)</strong> yang berakhiran <code>/exec</code>, lalu tempel di kolom URL di atas dan klik <strong>Simpan</strong>.</li>
