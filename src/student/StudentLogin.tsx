@@ -147,6 +147,12 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({ onSuccess, onOpenAdm
       return;
     }
 
+    const availableQuestions = storageService.getQuestions();
+    if (availableQuestions.length === 0) {
+      setError('Butir soal ujian belum dimuat dari server Google Spreadsheet. Silakan hubungi Panitia / Pengawas Ruang untuk melakukan sinkronisasi bank soal.');
+      return;
+    }
+
     if (tokenInput.trim().toUpperCase() !== (targetExam.token || '').trim().toUpperCase()) {
       setError(`Token ujian tidak valid. Pastikan token sesuai dengan yang dirilis oleh Panitia/Pengawas untuk sesi "${targetExam.title}" (${targetExam.token}).`);
       return;

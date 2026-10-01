@@ -77,24 +77,29 @@ function setToStorage<T>(key: string, value: T): void {
   }
 }
 
-// Initialize seed data if empty or merge missing questions/exams
+// Initialize seed data if empty or purge demo questions
 export function initStore(): void {
   if (!localStorage.getItem(KEYS.SCHOOLS)) {
     localStorage.setItem(KEYS.SCHOOLS, JSON.stringify(INITIAL_SCHOOLS));
   }
   
+  // Bersihkan seluruh butir soal versi demo bawaan lama ('q-001' s.d. 'q-012')
+  const DEMO_QUESTION_IDS = new Set([
+    'q-001', 'q-002', 'q-003', 'q-004', 'q-005',
+    'q-006', 'q-007', 'q-008', 'q-009', 'q-010',
+    'q-011', 'q-012'
+  ]);
+
   const existingQuestions = localStorage.getItem(KEYS.QUESTIONS);
   if (!existingQuestions) {
-    localStorage.setItem(KEYS.QUESTIONS, JSON.stringify(INITIAL_QUESTIONS));
+    localStorage.setItem(KEYS.QUESTIONS, JSON.stringify([]));
   } else {
     try {
       const parsed: Question[] = JSON.parse(existingQuestions);
-      const missing = INITIAL_QUESTIONS.filter((iq) => !parsed.some((pq) => pq.id === iq.id));
-      if (missing.length > 0) {
-        localStorage.setItem(KEYS.QUESTIONS, JSON.stringify([...parsed, ...missing]));
-      }
+      const cleaned = parsed.filter((q) => !DEMO_QUESTION_IDS.has(q.id));
+      localStorage.setItem(KEYS.QUESTIONS, JSON.stringify(cleaned));
     } catch {
-      localStorage.setItem(KEYS.QUESTIONS, JSON.stringify(INITIAL_QUESTIONS));
+      localStorage.setItem(KEYS.QUESTIONS, JSON.stringify([]));
     }
   }
 
@@ -104,20 +109,17 @@ export function initStore(): void {
   } else {
     try {
       const parsed: Exam[] = JSON.parse(existingExams);
-      // Ensure exam has pgCount, pgkCount, bsCount, and selectedQuestionIds if not set
       let updated = false;
       const updatedExams = parsed.map((e) => {
         let changed = false;
         const newExam = { ...e };
-        if (typeof newExam.pgCount === 'undefined' || typeof newExam.pgkCount === 'undefined' || typeof newExam.bsCount === 'undefined') {
-          newExam.pgCount = newExam.pgCount ?? 5;
-          newExam.pgkCount = newExam.pgkCount ?? 3;
-          newExam.bsCount = newExam.bsCount ?? 2;
-          changed = true;
-        }
-        if (!newExam.selectedQuestionIds || !Array.isArray(newExam.selectedQuestionIds) || newExam.selectedQuestionIds.length === 0) {
-          newExam.selectedQuestionIds = INITIAL_EXAM.selectedQuestionIds || [];
-          changed = true;
+        if (newExam.selectedQuestionIds && Array.isArray(newExam.selectedQuestionIds)) {
+          const filtered = newExam.selectedQuestionIds.filter((id) => !DEMO_QUESTION_IDS.has(id));
+          if (filtered.length !== newExam.selectedQuestionIds.length) {
+            newExam.selectedQuestionIds = filtered;
+            newExam.questionCount = filtered.length;
+            changed = true;
+          }
         }
         if (changed) updated = true;
         return newExam;
@@ -184,7 +186,16 @@ export const storageService = {
 
   // ---- QUESTIONS ----
   getQuestions(): Question[] {
-    return getFromStorage<Question[]>(KEYS.QUESTIONS, INITIAL_QUESTIONS);
+    return getFromStorage<Question[]>(KEYS.QUESTIONS, []);
+  },
+  clearQuestions(): void {
+    setToStorage(KEYS.QUESTIONS, []);
+    const exams = this.getExams();
+    exams.forEach((ex) => {
+      ex.selectedQuestionIds = [];
+      ex.questionCount = 0;
+    });
+    setToStorage(KEYS.EXAMS, exams);
   },
   saveQuestion(question: Omit<Question, 'id' | 'createdAt'> & { id?: string }): Question {
     const list = this.getQuestions();

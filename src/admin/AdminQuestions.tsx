@@ -350,6 +350,24 @@ export const AdminQuestions: React.FC = () => {
             <span>{copied ? 'Disalin!' : 'Salin (Ctrl+V)'}</span>
           </button>
 
+          {questions.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm('Kosongkan seluruh bank soal lokal? Butir soal versi demo akan dihapus sehingga Anda dapat menarik soal murni dari server spreadsheet.')) {
+                  storageService.clearQuestions();
+                  showToast('Seluruh butir soal lokal & demo telah dikosongkan.', 'info');
+                  refreshData();
+                }
+              }}
+              className="flex items-center gap-1.5 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 px-3 py-2 rounded-lg font-medium text-xs shadow-2xs transition cursor-pointer"
+              title="Hapus seluruh butir soal lokal / demo"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+              <span>Bersihkan Soal</span>
+            </button>
+          )}
+
           <button
             onClick={() => {
               setEditingQuestion(null);
@@ -417,7 +435,40 @@ export const AdminQuestions: React.FC = () => {
 
       {/* Questions List */}
       <div className="space-y-4">
-        {filtered.length === 0 ? (
+        {questions.length === 0 ? (
+          <div className="bg-white rounded-2xl p-10 text-center border border-dashed border-emerald-300 shadow-2xs space-y-4">
+            <div className="w-14 h-14 bg-emerald-50 rounded-full flex items-center justify-center mx-auto text-[#087443]">
+              <BookOpen className="w-7 h-7" />
+            </div>
+            <div className="max-w-md mx-auto space-y-1">
+              <h3 className="text-base font-bold text-slate-800">
+                Bank Soal Masih Kosong (0 Butir Soal)
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Seluruh butir soal versi demo bawaan telah dibersihkan. Silakan sinkronkan dengan Google Spreadsheet server Anda atau tempel baris soal langsung.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handlePullFromSheets}
+                disabled={isPulling}
+                className="flex items-center gap-2 bg-[#087443] hover:bg-[#065b34] text-white px-4 py-2.5 rounded-lg text-xs font-bold shadow-xs transition cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${isPulling ? 'animate-spin' : ''}`} />
+                <span>{isPulling ? 'Menarik Soal...' : 'Tarik Soal dari Sheets'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsPasteOpen(true)}
+                className="flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 px-4 py-2.5 rounded-lg text-xs font-bold shadow-2xs transition cursor-pointer"
+              >
+                <ClipboardPaste className="w-4 h-4 text-emerald-700" />
+                <span>Tempel Soal (Ctrl+V)</span>
+              </button>
+            </div>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="bg-white rounded-xl p-12 text-center border border-slate-200 text-slate-400 text-xs sm:text-sm">
             Tidak ada butir soal yang sesuai dengan kriteria filter pencarian.
           </div>
